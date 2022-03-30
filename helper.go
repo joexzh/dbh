@@ -79,22 +79,32 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 		config = c
 	}
 
-	var total int64
 	useStmt := false
 	if config.BulkInsertStmtThreshold > 0 && len(list)/bulkSize > config.BulkInsertStmtThreshold {
 		useStmt = true
 	}
-	var stmt *sql.Stmt
-	var err error
+	var (
+		total     int64
+		stmt      *sql.Stmt
+		err       error
+		sqlString string
+	)
 	if useStmt {
-		queryString := fmt.Sprintf("insert into %s (%s) values %s",
+		prepareSql := fmt.Sprintf("insert into %s (%s) values %s",
 			tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), bulkSize))
 		if config.PrintSql {
-			fmt.Println("prepared statement:", queryString)
+			fmt.Println("prepared statement:", prepareSql)
 		}
-		stmt, err = ex.PrepareContext(ctx, queryString)
+		stmt, err = ex.PrepareContext(ctx, prepareSql)
 		if err != nil {
 			return 0, err
+		}
+	} else {
+		if bulkSize == 1 {
+			sqlString = config.GetAndSetCachedSql(tableName, func() string {
+				return fmt.Sprintf("insert into %s (%s) values %s",
+					tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), bulkSize))
+			})
 		}
 	}
 	for i := 0; i < len(list); i += bulkSize {
@@ -116,12 +126,14 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 			ra, _ := ret.RowsAffected()
 			total += ra
 		} else {
-			queryString := fmt.Sprintf("insert into %s (%s) values %s",
-				tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), len(_l)))
-			if config.PrintSql {
-				fmt.Println(queryString)
+			if sqlString == "" {
+				sqlString = fmt.Sprintf("insert into %s (%s) values %s",
+					tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), len(_l)))
 			}
-			ret, err := ex.ExecContext(ctx, queryString, vals...)
+			if config.PrintSql {
+				fmt.Println(sqlString)
+			}
+			ret, err := ex.ExecContext(ctx, sqlString, vals...)
 			if err != nil {
 				return 0, err
 			}

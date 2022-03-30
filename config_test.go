@@ -84,7 +84,7 @@ func TestFindFromContextKeyMatchValueNotMatch(t *testing.T) {
 }
 
 func TestFindFromContextKeyValueMatch(t *testing.T) {
-	ctx := context.WithValue(context.Background(), ConfigKey, &Config{})
+	ctx := context.WithValue(context.Background(), ConfigKey, NewConfig())
 	c := findFromContext(ctx)
 
 	if c == nil {

@@ -65,9 +65,11 @@ func main() {
     insertdCount, err := dbh.BulkInsertContext(db, ctx, bulkSize, users...)
 
     // use another config in context
-    config := &dbh.Config{Mark: func(i, col, row int) string {
+    config := NewConfig()
+    config.Mark = func(i, col, row int) string {
         return "@param" + strconv.Itoa(i)
-    }}
+    }
+    // config must be a pointer adding to context value
     ctx = context.WithValue(ctx, dbh.ConfigKey, config)
     insertedCount, err := dbh.InsertContext(db, ctx, &user)
 }
