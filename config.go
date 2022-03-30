@@ -109,7 +109,7 @@ func (r *config) GetAndSetCachedSql(tableName string, f func() string) string {
 		return v
 	} else {
 		sql := f()
-		r.cache[tableName] = f()
+		r.cache[tableName] = sql
 		return sql
 	}
 }

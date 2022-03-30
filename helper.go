@@ -8,14 +8,14 @@ import (
 	"strings"
 )
 
-// ArgsProvider provide args information for Query functions.
+// ArgsProvider provide arguments for Query functions.
 type ArgsProvider interface {
 	// Args must return a slice of pointers of the field values in column order, for *sql.Rows.Scan(dest ...any) and for insert args.
 	// It must be implemented by the pointer of the model type.
 	Args() []any
 }
 
-// TableInfoProvider provide Columns, TableName for Insert functions.
+// TableInfoProvider provide arguments, column names and table name for Insert functions.
 type TableInfoProvider interface {
 	ArgsProvider
 	Columns() []string
