@@ -17,7 +17,7 @@ type TestUser struct {
 	Age  int
 }
 
-func (u *TestUser) Params() []any {
+func (u *TestUser) Args() []any {
 	return []any{&u.Id, &u.Name, &u.Age}
 }
 func (u *TestUser) Columns() []string {
@@ -406,7 +406,7 @@ func TestNewTStructPointer(t *testing.T) {
 
 type MyTestInt int
 
-func (i *MyTestInt) Params() []any {
+func (i *MyTestInt) Args() []any {
 	return []any{i}
 }
 

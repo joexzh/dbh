@@ -8,15 +8,16 @@ import (
 	"strings"
 )
 
-type ParamsProvider interface {
-	// Params must return a slice of pointers of the field values in column order, for *sql.Rows.Scan(dest ...any).
+// ArgsProvider provide args information for Query functions.
+type ArgsProvider interface {
+	// Args must return a slice of pointers of the field values in column order, for *sql.Rows.Scan(dest ...any) and for insert args.
 	// It must be implemented by the pointer of the model type.
-	Params() []any
+	Args() []any
 }
 
-// TableInfoProvider is for data model to inject table information
+// TableInfoProvider provide Columns, TableName for Insert functions.
 type TableInfoProvider interface {
-	ParamsProvider
+	ArgsProvider
 	Columns() []string
 	TableName() string
 }
@@ -34,20 +35,20 @@ type executable interface {
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 }
 
-func QueryRowContext[T ParamsProvider](q queryableRow, ctx context.Context, queryString string, vals ...any) (T, error) {
+func QueryRowContext[T ArgsProvider](q queryableRow, ctx context.Context, queryString string, vals ...any) (T, error) {
 	row := q.QueryRowContext(ctx, queryString, vals...)
 	t := newT[T]()
-	if err := row.Scan(t.Params()...); err != nil {
+	if err := row.Scan(t.Args()...); err != nil {
 		return t, err
 	}
 	return t, nil
 }
 
-func QueryRow[T ParamsProvider](q queryableRow, queryString string, vals ...any) (T, error) {
+func QueryRow[T ArgsProvider](q queryableRow, queryString string, vals ...any) (T, error) {
 	return QueryRowContext[T](q, context.Background(), queryString, vals...)
 }
 
-func QueryContext[T ParamsProvider](q queryable, ctx context.Context, queryString string, vals ...any) ([]T, error) {
+func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString string, vals ...any) ([]T, error) {
 	rows, err := q.QueryContext(ctx, queryString, vals...)
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func QueryContext[T ParamsProvider](q queryable, ctx context.Context, queryStrin
 	return list, nil
 }
 
-func Query[T ParamsProvider](q queryable, queryString string, vals ...any) ([]T, error) {
+func Query[T ArgsProvider](q queryable, queryString string, vals ...any) ([]T, error) {
 	return QueryContext[T](q, context.Background(), queryString, vals...)
 }
 
@@ -105,7 +106,7 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 		_l := list[i:end]
 		vals := make([]any, 0, len(cols)*len(_l))
 		for _, t := range _l {
-			vals = append(vals, t.Params()...)
+			vals = append(vals, t.Args()...)
 		}
 		if useStmt {
 			ret, err := stmt.ExecContext(ctx, vals...)
@@ -144,10 +145,10 @@ func InsertContext[T TableInfoProvider](ex executable, ctx context.Context, t T)
 	return BulkInsertContext(ex, ctx, 1, t)
 }
 
-func ScanList[T ParamsProvider](rows *sql.Rows, list *[]T) error {
+func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T) error {
 	for i := 0; rows.Next(); i++ {
 		t := newT[T]()
-		err := rows.Scan(t.Params()...)
+		err := rows.Scan(t.Args()...)
 		if err != nil {
 			return err
 		}
@@ -160,7 +161,7 @@ func ScanList[T ParamsProvider](rows *sql.Rows, list *[]T) error {
 	return nil
 }
 
-func newT[T ParamsProvider]() T {
+func newT[T ArgsProvider]() T {
 	// TODO we need a better way to init T efficiently
 	t := *new(T)
 	if typ := reflect.TypeOf(t); typ.Kind() == reflect.Ptr {
