@@ -79,17 +79,14 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 		config = c
 	}
 
-	useStmt := false
-	if config.BulkInsertStmtThreshold > 0 && len(list)/bulkSize > config.BulkInsertStmtThreshold {
-		useStmt = true
-	}
 	var (
-		total     int64
-		stmt      *sql.Stmt
-		err       error
-		sqlString string
+		total   int64
+		stmt    *sql.Stmt
+		useStmt bool
+		err     error
 	)
-	if useStmt {
+	if len(list)/bulkSize >= 2 {
+		useStmt = true
 		prepareSql := fmt.Sprintf("insert into %s (%s) values %s",
 			tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), bulkSize))
 		if config.PrintSql {
@@ -99,13 +96,7 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 		if err != nil {
 			return 0, err
 		}
-	} else {
-		if bulkSize == 1 {
-			sqlString = config.GetAndSetCachedSql(tableName, func() string {
-				return fmt.Sprintf("insert into %s (%s) values %s",
-					tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), bulkSize))
-			})
-		}
+		defer stmt.Close()
 	}
 	for i := 0; i < len(list); i += bulkSize {
 		end := i + bulkSize
@@ -126,7 +117,13 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 			ra, _ := ret.RowsAffected()
 			total += ra
 		} else {
-			if sqlString == "" {
+			var sqlString string
+			if len(_l) == 1 {
+				sqlString = config.GetAndSetCachedSql(tableName+"_insert_one", func() string {
+					return fmt.Sprintf("insert into %s (%s) values %s",
+						tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), 1))
+				})
+			} else {
 				sqlString = fmt.Sprintf("insert into %s (%s) values %s",
 					tableName, strings.Join(cols, ","), config.MarkInsertValueSql(len(cols), len(_l)))
 			}
@@ -173,7 +170,7 @@ func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T) error {
 	return nil
 }
 
-func newT[T ArgsProvider]() T {
+func newT[T any]() T {
 	// TODO we need a better way to init T efficiently
 	t := *new(T)
 	if typ := reflect.TypeOf(t); typ.Kind() == reflect.Ptr {

@@ -10,10 +10,6 @@ import (
 type config struct {
 	// PrintSql if true, will print sql for insert
 	PrintSql bool
-	// BulkInsertStmtThreshold controls if prepared statement will be used for BulkInsert when len(list)/bulkSize > BulkInsertStmtThreshold.
-	//
-	// Default value is 0, which prepared statement is disabled.
-	BulkInsertStmtThreshold int
 	// Mark is used to generate param marks for value part of insert statement
 	Mark    func(i, col, row int) string
 	cache   map[string]string

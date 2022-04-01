@@ -1,6 +1,6 @@
 # Db helper for Go1.18
 
-Wraps `*sql.DB`, `*sql.Tx` for convenient query and insert.
+Wraps `*sql.DB`, `*sql.Tx` and `*sql.Conn` for convenient query and insert.
 
 Uses generics for table model mapping.
 
@@ -35,7 +35,6 @@ func (u *TestUser) TableName() string {
 func main() {
     dbh.DefaultConfig.PrintSql = true
     dbh.DefaultConfig.Mark = dbh.MysqlMark
-    dbh.DefaultConfig.BulkInsertStmtThreshold = 20
 
     db, _ := sql.Open(...)
     ctx := context.Background()
@@ -56,6 +55,11 @@ func main() {
     insertedCount, err := dbh.InsertContext(tx, ctx, u1)
     tx.Commit()
 
+    // sql.Conn
+    conn, _ := db.Conn(ctx)
+    insertedCount, err := dbh.InsertContext(conn, ctx, u1)
+    conn.Close()
+
     // Bulk insert
     var users []*TestUser
     for i := 0; i < 500000; i++ {
@@ -75,9 +79,12 @@ func main() {
 }
 ```
 
+dbh query and insert functions accept `*sql.DB`, `*sql.Tx` or `*sql.Conn` as first argument.
+
 `Config` is only used for insert.
 
 `Config.Mark` function is used for insert value parameter marks.
 Simple Mark function is provided, `MysqlMark`, `PostgresMark`, `SqlserverMark`
 
-For select query only, implement `ArgsProvider` is enough.
+`Args()` funtion Should be implemented by pointer to the model struct/type.
+For select query only, implement `ArgsProvider` (the `Args()` function) is enough.

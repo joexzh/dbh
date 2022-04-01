@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"log"
+	"reflect"
 	"regexp"
 	"testing"
 
@@ -185,139 +186,16 @@ func TestTxInsert(t *testing.T) {
 	}
 }
 
-func TestBulkInsert(t *testing.T) {
-	db, mock := NewMock()
-	users := make([]*TestUser, 2001)
-	bulkSize := 1000
+func mockBulkInsert(t *testing.T, db executable, mock sqlmock.Sqlmock, bulkSize, listSize int,
+	prepare func(sqlmock.Sqlmock) *sqlmock.ExpectedPrepare) []*TestUser {
+	users := make([]*TestUser, listSize)
+	var stmt *sqlmock.ExpectedPrepare
+	var useStmt bool
+	if len(users)/bulkSize >= 2 {
+		useStmt = true
+		stmt = prepare(mock)
+	}
 	for i := 0; i < len(users); i += bulkSize {
-		args := make([]driver.Value, 0)
-		end := i + bulkSize
-		if end > len(users) {
-			end = len(users)
-		}
-		for j := i; j < end; j++ {
-			_user := TestUser{
-				Id:   j,
-				Name: "Joe",
-				Age:  18,
-			}
-			users[j] = &_user
-			args = append(args, _user.Id, _user.Name, _user.Age)
-		}
-
-		mock.ExpectExec("insert into users").WithArgs(args...).WillReturnResult(sqlmock.NewResult(int64(end-1), int64(end-i)))
-	}
-
-	ctx := context.Background()
-
-	total, err := BulkInsertContext(db, ctx, bulkSize, users...)
-	if err != nil {
-		t.Fatalf("BulkInsertContext error: %s", err)
-	}
-
-	if err = mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("there were unfulfilled expectations: %s", err)
-	}
-
-	if total != int64(len(users)) {
-		t.Fatalf("BulkInsertContext error: total != len(users), total=%d, len(users)=%d", total, len(users))
-	}
-}
-
-func TestTxBulkInsert(t *testing.T) {
-	db, mock := NewMock()
-	mock.ExpectBegin()
-	users := make([]*TestUser, 2001)
-	bulkSize := 1000
-	for i := 0; i < len(users); i += bulkSize {
-		args := make([]driver.Value, 0)
-		end := i + bulkSize
-		if end > len(users) {
-			end = len(users)
-		}
-		for j := i; j < end; j++ {
-			_user := TestUser{
-				Id:   j,
-				Name: "Joe",
-				Age:  18,
-			}
-			users[j] = &_user
-			args = append(args, _user.Id, _user.Name, _user.Age)
-		}
-
-		mock.ExpectExec("insert into users").WithArgs(args...).WillReturnResult(sqlmock.NewResult(int64(end-1), int64(end-i)))
-	}
-	mock.ExpectCommit()
-
-	ctx := context.Background()
-
-	tx, err := db.Begin()
-	if err != nil {
-		t.Fatalf("tx error, %s", err)
-	}
-	total, err := BulkInsertContext(tx, ctx, bulkSize, users...)
-	if err != nil {
-		t.Fatalf("BulkInsertContext error: %s", err)
-	}
-	_ = tx.Commit()
-
-	if err = mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("there were unfulfilled expectations: %s", err)
-	}
-
-	if total != int64(len(users)) {
-		t.Fatalf("BulkInsertContext error: total != len(users), total=%d, len(users)=%d", total, len(users))
-	}
-}
-
-func TestBulkInsertUseStmtExact(t *testing.T) {
-	db, mock := NewMock()
-	userLen := 100
-	bulkSize := 20
-	stmtThreshold := 4
-	users := make([]*TestUser, userLen)
-
-	mockPrepare := mock.ExpectPrepare("insert into users")
-	for i := 0; i < userLen; i += bulkSize {
-		args := make([]driver.Value, 0)
-		end := i + bulkSize
-		for j := i; j < end; j++ {
-			_user := TestUser{
-				Id:   j,
-				Name: "Joe",
-				Age:  18,
-			}
-			users[j] = &_user
-			args = append(args, _user.Id, _user.Name, _user.Age)
-		}
-		mockPrepare.ExpectExec().WithArgs(args...).WillReturnResult(sqlmock.NewResult(int64(end-1), int64(end-i)))
-	}
-
-	DefaultConfig.BulkInsertStmtThreshold = stmtThreshold
-	total, err := BulkInsert(db, bulkSize, users...)
-
-	if err != nil {
-		t.Fatalf("BulkInsert error: %s", err)
-	}
-	if err = mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("there were unfulfilled expectations: %s", err)
-	}
-	if total != int64(len(users)) {
-		t.Fatalf("BulkInsert error: total != len(users), total=%d, len(users)=%d", total, len(users))
-	}
-
-}
-
-func TestBulkInsertUseStmtEdge(t *testing.T) {
-	db, mock := NewMock()
-	userLen := 101
-	bulkSize := 20
-	stmtThreshold := 4
-	users := make([]*TestUser, userLen)
-
-	mockPrepare := mock.ExpectPrepare("insert into users")
-	useStmt := userLen/bulkSize > stmtThreshold
-	for i := 0; i < userLen; i += bulkSize {
 		args := make([]driver.Value, 0)
 		end := i + bulkSize
 		if end > len(users) {
@@ -334,25 +212,104 @@ func TestBulkInsertUseStmtEdge(t *testing.T) {
 			args = append(args, _user.Id, _user.Name, _user.Age)
 		}
 		if useStmt {
-			mockPrepare.ExpectExec().WithArgs(args...).WillReturnResult(sqlmock.NewResult(int64(end-1), int64(end-i)))
+			stmt.ExpectExec().WithArgs(args...).WillReturnResult(sqlmock.NewResult(int64(end-1), int64(end-i)))
 		} else {
 			mock.ExpectExec("insert into users").WithArgs(args...).WillReturnResult(sqlmock.NewResult(int64(end-1), int64(end-i)))
 		}
-
 	}
 
-	DefaultConfig.BulkInsertStmtThreshold = stmtThreshold
-	total, err := BulkInsert(db, bulkSize, users...)
+	return users
+}
 
+func testBulkInsert(t *testing.T, db executable, ctx context.Context, bulkSize int, users []*TestUser) int64 {
+	total, err := BulkInsertContext(db, ctx, bulkSize, users...)
 	if err != nil {
-		t.Fatalf("BulkInsert error: %s", err)
+		t.Fatalf("BulkInsertContext error: %s", err)
 	}
-	if err = mock.ExpectationsWereMet(); err != nil {
+
+	return total
+}
+
+func validateInsertResult(t *testing.T, mock sqlmock.Sqlmock, total int64, users []*TestUser) {
+	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
 	}
+
 	if total != int64(len(users)) {
-		t.Fatalf("BulkInsert error: total != len(users), total=%d, len(users)=%d", total, len(users))
+		t.Fatalf("BulkInsertContext error: total != len(users), total=%d, len(users)=%d", total, len(users))
 	}
+}
+
+var prepare = func(mock sqlmock.Sqlmock) *sqlmock.ExpectedPrepare {
+	return mock.ExpectPrepare("insert into users")
+}
+var notPrepare = func(mock sqlmock.Sqlmock) *sqlmock.ExpectedPrepare { return nil }
+
+func TestBulkInsertPrepared(t *testing.T) {
+	db, mock := NewMock()
+	bulkSize, listSize := 10, 100
+	users := mockBulkInsert(t, db, mock, bulkSize, listSize, prepare)
+
+	ctx := context.Background()
+	total := testBulkInsert(t, db, ctx, bulkSize, users)
+
+	validateInsertResult(t, mock, total, users)
+}
+
+func TestBulkInsertNotPrepared(t *testing.T) {
+	db, mock := NewMock()
+	bulkSize, listSize := 51, 100
+	users := mockBulkInsert(t, db, mock, bulkSize, listSize, notPrepare)
+
+	ctx := context.Background()
+	total := testBulkInsert(t, db, ctx, bulkSize, users)
+
+	validateInsertResult(t, mock, total, users)
+}
+
+func TestTxBulkInsert(t *testing.T) {
+	db, mock := NewMock()
+	bulkSize, listSize := 1000, 2001
+	mock.ExpectBegin()
+	users := mockBulkInsert(t, db, mock, bulkSize, listSize, prepare)
+	mock.ExpectCommit()
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := testBulkInsert(t, db, ctx, bulkSize, users)
+	tx.Commit()
+
+	validateInsertResult(t, mock, total, users)
+}
+
+func TestSessionBulkInsert(t *testing.T) {
+	db, mock := NewMock()
+	bulkSize, listSize := 1000, 2001
+	mock.ExpectBegin()
+	users := mockBulkInsert(t, db, mock, bulkSize, listSize, prepare)
+	mock.ExpectCommit()
+
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := testBulkInsert(t, db, ctx, bulkSize, users)
+	tx.Commit()
+	conn.Close()
+
+	validateInsertResult(t, mock, total, users)
+
 }
 
 func TestScanListFromZeroLen(t *testing.T) {
@@ -417,5 +374,140 @@ func TestNewTNotStructTypePointer(t *testing.T) {
 
 	if i != *newI {
 		t.Fatalf("newTStructPointer error, got %v, expected %v", newI, i)
+	}
+}
+
+func BenchmarkNormalInsert(b *testing.B) {
+	b.ReportAllocs()
+	db, mock := NewMock()
+	defer db.Close()
+	for i := 0; i < b.N; i++ {
+
+		user := TestUser{Id: i}
+
+		mock.ExpectExec("insert into users").WithArgs(user.Id, user.Name, user.Age).WillReturnResult(sqlmock.NewResult(int64(user.Id), 1))
+		if err := mock.ExpectationsWereMet(); err != nil {
+
+		}
+		ctx := context.Background()
+
+		r, err := db.ExecContext(ctx, "insert into users (id, name, age) VALUES (?, ?, ?)", user.Id, user.Name, user.Age)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ra, _ := r.RowsAffected()
+		if ra != 1 {
+			log.Fatal(ra)
+		}
+	}
+}
+
+func BenchmarkGenericInsert(b *testing.B) {
+	b.ReportAllocs()
+	db, mock := NewMock()
+	defer db.Close()
+	for i := 0; i < b.N; i++ {
+
+		user := &TestUser{Id: i}
+		mock.ExpectExec("insert into users").WithArgs(user.Id, user.Name, user.Age).WillReturnResult(sqlmock.NewResult(int64(user.Id), 1))
+
+		ctx := context.Background()
+
+		r, err := InsertContext(db, ctx, user)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if r != 1 {
+			log.Fatal(r)
+		}
+	}
+}
+
+func BenchmarkNormalQuery(b *testing.B) {
+	b.ReportAllocs()
+	db, mock := NewMock()
+	defer db.Close()
+	query := "select * from users where id=?"
+	for i := 0; i < b.N; i++ {
+
+		PrepareQueryData(mock, query)
+
+		ctx := context.Background()
+
+		rows, err := db.QueryContext(ctx, query, u1.Id)
+		if err != nil {
+			log.Fatal(err)
+		}
+		users := make([]*TestUser, 1)
+		for rows.Next() {
+			user := new(TestUser)
+			rows.Scan(&user.Id, &user.Name, &user.Age)
+			users[0] = user
+		}
+		rows.Close()
+		if len(users) != 1 {
+			log.Fatal(len(users))
+		}
+	}
+}
+
+func BenchmarkGenericQuery(b *testing.B) {
+	b.ReportAllocs()
+	db, mock := NewMock()
+	defer db.Close()
+	query := "select * from users where id=?"
+	for i := 0; i < b.N; i++ {
+		PrepareQueryData(mock, query)
+
+		ctx := context.Background()
+
+		users, err := QueryContext[*TestUser](db, ctx, query, u1.Id)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(users) != 1 {
+			log.Fatal(len(users))
+		}
+	}
+}
+
+func newUser() *TestUser {
+	return new(TestUser)
+}
+
+func BenchmarkNew(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		newUser()
+	}
+}
+
+func BenchmarkNewTPointer(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		newT[*TestUser]()
+	}
+}
+
+func BenchmarkNewTNonPointer(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		newT[TestUser]()
+	}
+}
+
+var benchuser = TestUser{}
+var typ = reflect.TypeOf(benchuser)
+
+func reflectNew() *TestUser {
+	return reflect.New(typ).Interface().(*TestUser)
+}
+
+func BenchmarkReflectNew(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		reflectNew()
 	}
 }
