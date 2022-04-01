@@ -81,10 +81,8 @@ func main() {
 
 dbh query and insert functions accept `*sql.DB`, `*sql.Tx` or `*sql.Conn` as first argument.
 
-`Config` is only used for insert.
-
-`Config.Mark` function is used for insert value parameter marks.
+`Config` is only used for insert. `Config.Mark` function is used for insert value parameter marks.
 Simple Mark function is provided, `MysqlMark`, `PostgresMark`, `SqlserverMark`
 
-`Args()` funtion Should be implemented by pointer to the model struct/type.
+`Args()` funtion Should be implemented by pointer to the model struct/type, and return a slice of pointers.
 For select query only, implement `ArgsProvider` (the `Args()` function) is enough.
