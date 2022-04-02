@@ -36,34 +36,33 @@ type executable interface {
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 }
 
-func QueryRowContext[T ArgsProvider](q queryableRow, ctx context.Context, queryString string, vals ...any) (T, error) {
+func QueryRowContext[T ArgsProvider](q queryableRow, ctx context.Context, queryString string, t T, vals ...any) error {
 	row := q.QueryRowContext(ctx, queryString, vals...)
-	t := newT[T]()
 	if err := row.Scan(t.Args()...); err != nil {
-		return t, err
+		return err
 	}
-	return t, nil
+	return nil
 }
 
-func QueryRow[T ArgsProvider](q queryableRow, queryString string, vals ...any) (T, error) {
-	return QueryRowContext[T](q, context.Background(), queryString, vals...)
+func QueryRow[T ArgsProvider](q queryableRow, queryString string, t T, vals ...any) error {
+	return QueryRowContext(q, context.Background(), queryString, t, vals...)
 }
 
-func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString string, vals ...any) ([]T, error) {
+func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString string, newT func() T, vals ...any) ([]T, error) {
 	rows, err := q.QueryContext(ctx, queryString, vals...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	list := make([]T, 0)
-	if err = ScanList(rows, &list); err != nil {
+	if err = ScanList(rows, &list, newT); err != nil {
 		return nil, err
 	}
 	return list, nil
 }
 
-func Query[T ArgsProvider](q queryable, queryString string, vals ...any) ([]T, error) {
-	return QueryContext[T](q, context.Background(), queryString, vals...)
+func Query[T ArgsProvider](q queryable, queryString string, createT func() T, vals ...any) ([]T, error) {
+	return QueryContext(q, context.Background(), queryString, createT, vals...)
 }
 
 func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, bulkSize int, list ...T) (int64, error) {
@@ -152,9 +151,14 @@ func InsertContext[T TableInfoProvider](ex executable, ctx context.Context, t T)
 	return BulkInsertContext(ex, ctx, 1, t)
 }
 
-func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T) error {
+func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T, createT func() T) error {
 	for i := 0; rows.Next(); i++ {
-		t := newT[T]()
+		var t T
+		if createT != nil {
+			t = createT()
+		} else {
+			t = newT[T]()
+		}
 		err := rows.Scan(t.Args()...)
 		if err != nil {
 			return err

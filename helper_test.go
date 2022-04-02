@@ -31,12 +31,12 @@ func (u *TestUser) Config() *Config {
 	return DefaultConfig
 }
 
-var u1 = &TestUser{
+var u1 = TestUser{
 	Id:   1,
 	Name: "John",
 	Age:  30,
 }
-var u2 = &TestUser{
+var u2 = TestUser{
 	Id:   2,
 	Name: "Joe",
 	Age:  18,
@@ -50,9 +50,12 @@ func NewMock() (*sql.DB, sqlmock.Sqlmock) {
 	return db, mock
 }
 
-func PrepareQueryData(mock sqlmock.Sqlmock, query string) {
-	rows1 := mock.NewRows([]string{"id", "name", "age"}).AddRow(u1.Id, u1.Name, u1.Age)
-	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(u1.Id).WillReturnRows(rows1)
+func PrepareQueryData(mock sqlmock.Sqlmock, query string, users []TestUser, id int) {
+	rows := sqlmock.NewRows([]string{"id", "name", "age"})
+	for i := range users {
+		rows.AddRow(users[i].Id, users[i].Name, users[i].Age)
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WithArgs(id).WillReturnRows(rows)
 }
 
 func PrepareInsert(mock sqlmock.Sqlmock) {
@@ -70,17 +73,18 @@ func TestQueryRow(t *testing.T) {
 	db, mock := NewMock()
 	defer db.Close()
 	query := "select id, name, age from users where id = ?"
-	PrepareQueryData(mock, query)
+	PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 
-	user, err := QueryRowContext[*TestUser](db, context.Background(), query, u1.Id)
+	var user TestUser
+	err := QueryRowContext(db, context.Background(), query, &user, u1.Id)
 	if err != nil {
 		t.Fatalf("QueryRow error: %s", err)
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
 	}
-	if *user != *u1 {
-		t.Fatalf("user not equal, %v, %v", *user, *u1)
+	if user != u1 {
+		t.Fatalf("user not equal, %v, %v", user, u1)
 	}
 }
 
@@ -88,11 +92,11 @@ func TestQuery(t *testing.T) {
 	db, mock := NewMock()
 	defer db.Close()
 	query := "select * from users where id=?"
-	PrepareQueryData(mock, query)
+	PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 
 	ctx := context.Background()
 
-	users1, err := QueryContext[*TestUser](db, ctx, query, u1.Id)
+	users1, err := QueryContext(db, ctx, query, func() *TestUser { return new(TestUser) }, u1.Id)
 	if err != nil {
 		t.Fatalf("QueryContext error: %s", err)
 	}
@@ -103,7 +107,7 @@ func TestQuery(t *testing.T) {
 	if len(users1) != 1 {
 		t.Fatalf("QueryContext error: len(users1) != 1")
 	}
-	if *users1[0] != *u1 {
+	if *users1[0] != u1 {
 		t.Fatalf("QueryContext error: *users1[0] != *u")
 	}
 }
@@ -113,7 +117,7 @@ func TestTxQuery(t *testing.T) {
 	defer db.Close()
 	query := "select * from users where id=? for update"
 	mock.ExpectBegin()
-	PrepareQueryData(mock, query)
+	PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 	mock.ExpectCommit()
 
 	ctx := context.Background()
@@ -123,7 +127,7 @@ func TestTxQuery(t *testing.T) {
 		t.Fatalf("BeginTx error: %s", err)
 	}
 	defer tx.Rollback()
-	users1, err := QueryContext[*TestUser](tx, ctx, query, u1.Id)
+	users1, err := QueryContext(tx, ctx, query, func() *TestUser { return new(TestUser) }, u1.Id)
 	if err != nil {
 		t.Fatalf("QueryContext error: %s", err)
 	}
@@ -135,7 +139,7 @@ func TestTxQuery(t *testing.T) {
 	if len(users1) != 1 {
 		t.Fatalf("QueryContext error: len(users1) != 1")
 	}
-	if *users1[0] != *u1 {
+	if *users1[0] != u1 {
 		t.Fatalf("QueryContext error: *users1[0] != *u")
 	}
 }
@@ -147,11 +151,11 @@ func TestInsert(t *testing.T) {
 	ctx := context.Background()
 
 	db.Driver()
-	_, err := InsertContext(db, ctx, u1)
+	_, err := InsertContext(db, ctx, &u1)
 	if err != nil {
 		t.Fatalf("InsertContext error: %s", err)
 	}
-	_, err = InsertContext(db, ctx, u2)
+	_, err = InsertContext(db, ctx, &u2)
 	if err != nil {
 		t.Fatalf("InsertContext error: %s", err)
 	}
@@ -174,11 +178,11 @@ func TestTxInsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BeginTx error: %s", err)
 	}
-	_, err = InsertContext(tx, ctx, u1)
+	_, err = InsertContext(tx, ctx, &u1)
 	if err != nil {
 		t.Fatalf("InsertContext error: %s", err)
 	}
-	_, err = InsertContext(tx, ctx, u2)
+	_, err = InsertContext(tx, ctx, &u2)
 	if err != nil {
 		t.Fatalf("InsertContext error: %s", err)
 	}
@@ -318,19 +322,19 @@ func TestSessionBulkInsert(t *testing.T) {
 func TestScanListFromZeroLen(t *testing.T) {
 	db, mock := NewMock()
 	query := "select id, name, age from users where id=?"
-	PrepareQueryData(mock, query)
+	PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 
 	var list []*TestUser
 	rows, err := db.Query(query, u1.Id)
 	if err != nil {
 		t.Fatalf("db.Query error: %s", err)
 	}
-	ScanList(rows, &list)
+	ScanList(rows, &list, nil)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
 	}
-	if len(list) != 1 {
+	if len(list) != 1 && *list[0] == u1 {
 		t.Fatalf("len(list) after ScanList got %d, expected %d", len(list), 1)
 	}
 }
@@ -338,19 +342,39 @@ func TestScanListFromZeroLen(t *testing.T) {
 func TestScanListFromOneLen(t *testing.T) {
 	db, mock := NewMock()
 	query := "select id, name, age from users where id=?"
-	PrepareQueryData(mock, query)
+	PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 
 	list := make([]*TestUser, 1)
 	rows, err := db.Query(query, u1.Id)
 	if err != nil {
 		t.Fatalf("db.Query error: %s", err)
 	}
-	ScanList(rows, &list)
+	ScanList(rows, &list, nil)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
 	}
-	if len(list) != 1 {
+	if len(list) != 1 && *list[0] == u1 {
+		t.Fatalf("len(list) after ScanList got %d, expected %d", len(list), 1)
+	}
+}
+
+func TestScanListWithCreateT(t *testing.T) {
+	db, mock := NewMock()
+	query := "select id, name, age from users where id=?"
+	PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
+
+	list := make([]*TestUser, 0)
+	rows, err := db.Query(query, u1.Id)
+	if err != nil {
+		t.Fatalf("db.Query error: %s", err)
+	}
+	ScanList(rows, &list, func() *TestUser { return new(TestUser) })
+
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
+	if len(list) != 1 && *list[0] == u1 {
 		t.Fatalf("len(list) after ScanList got %d, expected %d", len(list), 1)
 	}
 }
@@ -432,7 +456,7 @@ func BenchmarkNormalQuery(b *testing.B) {
 	query := "select * from users where id=?"
 	for i := 0; i < b.N; i++ {
 
-		PrepareQueryData(mock, query)
+		PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 
 		ctx := context.Background()
 
@@ -459,11 +483,10 @@ func BenchmarkGenericQuery(b *testing.B) {
 	defer db.Close()
 	query := "select * from users where id=?"
 	for i := 0; i < b.N; i++ {
-		PrepareQueryData(mock, query)
+		PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 
 		ctx := context.Background()
-
-		users, err := QueryContext[*TestUser](db, ctx, query, u1.Id)
+		users, err := QueryContext(db, ctx, query, func() *TestUser { return new(TestUser) }, u1.Id)
 		if err != nil {
 			log.Fatal(err)
 		}

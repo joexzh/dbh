@@ -42,7 +42,16 @@ func main() {
     ctx := context.Background()
 
     // select []*TestUser
-    users, err := dbh.QueryContext[*TestUser](db, ctx, "select * from users where name=? and age=?", "John", 30)
+    users, err := dbh.QueryContext[*TestUser](db, ctx, "select * from users where name=? and age=?", nil, "John", 30)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // provide a newT function to avoid using reflection
+    newUser := func() *TestUser {
+        return new(TestUser)
+    }
+    users, err := dbh.QueryContext[*TestUser](db, ctx, "select * from users where name=? and age=?", newUser, "John", 30)
     if err != nil {
         log.Fatal(err)
     }
@@ -77,5 +86,5 @@ dbh query and insert functions accept `*sql.DB`, `*sql.Tx` or `*sql.Conn` as fir
 `Config` is only used for insert. A `DefaultConfig` is provided. `Config.Mark` function is used for insert value parameter marks.
 Simple Mark function is provided, `MysqlMark`, `PostgresMark`, `SqlserverMark`
 
-`Args()` funtion Should be implemented by pointer to the model struct/type, and return a slice of pointers.
+`Args()` funtion must be implemented by pointer to the model struct/type, and return a slice of pointers.
 For select query only, implement `ArgsProvider` (the `Args()` function) is enough.
