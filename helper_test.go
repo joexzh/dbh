@@ -27,6 +27,9 @@ func (u *TestUser) Columns() []string {
 func (u *TestUser) TableName() string {
 	return "users"
 }
+func (u *TestUser) Config() *Config {
+	return DefaultConfig
+}
 
 var u1 = &TestUser{
 	Id:   1,
@@ -381,14 +384,13 @@ func BenchmarkNormalInsert(b *testing.B) {
 	b.ReportAllocs()
 	db, mock := NewMock()
 	defer db.Close()
+
 	for i := 0; i < b.N; i++ {
 
 		user := TestUser{Id: i}
 
 		mock.ExpectExec("insert into users").WithArgs(user.Id, user.Name, user.Age).WillReturnResult(sqlmock.NewResult(int64(user.Id), 1))
-		if err := mock.ExpectationsWereMet(); err != nil {
 
-		}
 		ctx := context.Background()
 
 		r, err := db.ExecContext(ctx, "insert into users (id, name, age) VALUES (?, ?, ?)", user.Id, user.Name, user.Age)

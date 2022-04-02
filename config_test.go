@@ -1,7 +1,6 @@
 package dbh
 
 import (
-	"context"
 	"strconv"
 	"testing"
 )
@@ -62,32 +61,5 @@ func TestMarkInsertValueSqlSqlServerStyleSameName(t *testing.T) {
 
 	if got != expected {
 		t.Errorf("expected: %s, got: %s", expected, got)
-	}
-}
-
-func TestFindFromContextKeyNotMatch(t *testing.T) {
-	ctx := context.Background()
-	c := findFromContext(ctx)
-
-	if c != nil {
-		t.Errorf("expected: nil, got: %v", c)
-	}
-}
-
-func TestFindFromContextKeyMatchValueNotMatch(t *testing.T) {
-	ctx := context.WithValue(context.Background(), ConfigKey, "test")
-	c := findFromContext(ctx)
-
-	if c != nil {
-		t.Errorf("expected: nil, got: %v", c)
-	}
-}
-
-func TestFindFromContextKeyValueMatch(t *testing.T) {
-	ctx := context.WithValue(context.Background(), ConfigKey, NewConfig())
-	c := findFromContext(ctx)
-
-	if c == nil {
-		t.Errorf("expected: not nil, got: nil")
 	}
 }

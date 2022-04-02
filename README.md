@@ -1,4 +1,4 @@
-# Db helper for Go1.18
+# Simple Db helper for Go1.18
 
 Wraps `*sql.DB`, `*sql.Tx` and `*sql.Conn` for convenient query and insert.
 
@@ -21,6 +21,8 @@ type TestUser struct {
     Age  int
 }
 
+var config = dbh.NewConfig(false, dbh.MysqlMark)
+
 // implement TableInfoProvider interface
 func (u *TestUser) Args() []any {
     return []any{&u.Id, &u.Name, &u.Age}
@@ -31,11 +33,11 @@ func (u *TestUser) Columns() []string {
 func (u *TestUser) TableName() string {
     return "users"
 }
+func (u *TestUser) Config() *dbh.Config {
+    return config
+}
 
 func main() {
-    dbh.DefaultConfig.PrintSql = true
-    dbh.DefaultConfig.Mark = dbh.MysqlMark
-
     db, _ := sql.Open(...)
     ctx := context.Background()
 
@@ -67,21 +69,12 @@ func main() {
     }
     bulkSize := 1000
     insertdCount, err := dbh.BulkInsertContext(db, ctx, bulkSize, users...)
-
-    // use another config in context
-    config := NewConfig()
-    config.Mark = func(i, col, row int) string {
-        return "@param" + strconv.Itoa(i)
-    }
-    // config must be a pointer adding to context value
-    ctx = context.WithValue(ctx, dbh.ConfigKey, config)
-    insertedCount, err := dbh.InsertContext(db, ctx, &user)
 }
 ```
 
 dbh query and insert functions accept `*sql.DB`, `*sql.Tx` or `*sql.Conn` as first argument.
 
-`Config` is only used for insert. `Config.Mark` function is used for insert value parameter marks.
+`Config` is only used for insert. A `DefaultConfig` is provided. `Config.Mark` function is used for insert value parameter marks.
 Simple Mark function is provided, `MysqlMark`, `PostgresMark`, `SqlserverMark`
 
 `Args()` funtion Should be implemented by pointer to the model struct/type, and return a slice of pointers.
