@@ -9,15 +9,15 @@ import (
 )
 
 // ArgsProvider provide arguments for Query functions.
-type ArgsProvider[T any] interface {
+type ArgsProvider interface {
 	// Args must return a slice of pointers of the field values in column order, for *sql.Rows.Scan(dest ...any) and for insert args.
 	// It must be implemented by the pointer of the model type.
 	Args() []any
 }
 
 // TableInfoProvider provide arguments, column names and table name for Insert functions.
-type TableInfoProvider[T any] interface {
-	ArgsProvider[T]
+type TableInfoProvider interface {
+	ArgsProvider
 	Columns() []string
 	TableName() string
 	Config() *Config
@@ -36,7 +36,7 @@ type executable interface {
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 }
 
-func QueryRowContext[T ArgsProvider[T]](q queryableRow, ctx context.Context, queryString string, vals ...any) (T, error) {
+func QueryRowContext[T ArgsProvider](q queryableRow, ctx context.Context, queryString string, vals ...any) (T, error) {
 	row := q.QueryRowContext(ctx, queryString, vals...)
 	t := newT[T]()
 	if err := row.Scan(t.Args()...); err != nil {
@@ -45,11 +45,11 @@ func QueryRowContext[T ArgsProvider[T]](q queryableRow, ctx context.Context, que
 	return t, nil
 }
 
-func QueryRow[T ArgsProvider[T]](q queryableRow, queryString string, vals ...any) (T, error) {
+func QueryRow[T ArgsProvider](q queryableRow, queryString string, vals ...any) (T, error) {
 	return QueryRowContext[T](q, context.Background(), queryString, vals...)
 }
 
-func QueryContext[T ArgsProvider[T]](q queryable, ctx context.Context, queryString string, vals ...any) ([]T, error) {
+func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString string, vals ...any) ([]T, error) {
 	rows, err := q.QueryContext(ctx, queryString, vals...)
 	if err != nil {
 		return nil, err
@@ -62,11 +62,11 @@ func QueryContext[T ArgsProvider[T]](q queryable, ctx context.Context, queryStri
 	return list, nil
 }
 
-func Query[T ArgsProvider[T]](q queryable, queryString string, vals ...any) ([]T, error) {
+func Query[T ArgsProvider](q queryable, queryString string, vals ...any) ([]T, error) {
 	return QueryContext[T](q, context.Background(), queryString, vals...)
 }
 
-func BulkInsertContext[T TableInfoProvider[T]](ex executable, ctx context.Context, bulkSize int, list ...T) (int64, error) {
+func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, bulkSize int, list ...T) (int64, error) {
 	for len(list) == 0 {
 		return 0, nil
 	}
@@ -140,19 +140,19 @@ func BulkInsertContext[T TableInfoProvider[T]](ex executable, ctx context.Contex
 	return total, nil
 }
 
-func BulkInsert[T TableInfoProvider[T]](ex executable, bulkSize int, list ...T) (int64, error) {
+func BulkInsert[T TableInfoProvider](ex executable, bulkSize int, list ...T) (int64, error) {
 	return BulkInsertContext(ex, context.Background(), bulkSize, list...)
 }
 
-func Insert[T TableInfoProvider[T]](ex executable, t T) (int64, error) {
+func Insert[T TableInfoProvider](ex executable, t T) (int64, error) {
 	return BulkInsertContext(ex, context.Background(), 1, t)
 }
 
-func InsertContext[T TableInfoProvider[T]](ex executable, ctx context.Context, t T) (int64, error) {
+func InsertContext[T TableInfoProvider](ex executable, ctx context.Context, t T) (int64, error) {
 	return BulkInsertContext(ex, ctx, 1, t)
 }
 
-func ScanList[T ArgsProvider[T]](rows *sql.Rows, list *[]T) error {
+func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T) error {
 	for i := 0; rows.Next(); i++ {
 		t := newT[T]()
 		err := rows.Scan(t.Args()...)
