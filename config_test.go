@@ -5,10 +5,8 @@ import (
 	"testing"
 )
 
-func TestMarkInsertValueSqlMysqlStyle(t *testing.T) {
-	DefaultConfig.Mark = func(i, col, row int) string {
-		return "?"
-	}
+func TestMysqlMark(t *testing.T) {
+	DefaultConfig.Mark = MysqlMark
 	cols, rows := 3, 4
 
 	expected := "(?,?,?),(?,?,?),(?,?,?),(?,?,?)"
@@ -19,10 +17,8 @@ func TestMarkInsertValueSqlMysqlStyle(t *testing.T) {
 	}
 }
 
-func TestMarkInsertValueSqlPostgresStyle(t *testing.T) {
-	DefaultConfig.Mark = func(i, col, row int) string {
-		return "$" + strconv.Itoa(i+1)
-	}
+func TestPostgresMark(t *testing.T) {
+	DefaultConfig.Mark = PostgresMark
 	cols, rows := 3, 4
 
 	expected := "($1,$2,$3),($4,$5,$6),($7,$8,$9),($10,$11,$12)"
@@ -33,13 +29,11 @@ func TestMarkInsertValueSqlPostgresStyle(t *testing.T) {
 	}
 }
 
-func TestMarkInsertValueSqlSqlServerStyle(t *testing.T) {
-	DefaultConfig.Mark = func(i, col, row int) string {
-		return "@P" + strconv.Itoa(i)
-	}
+func TestSqlserverMark(t *testing.T) {
+	DefaultConfig.Mark = SqlserverMark
 	cols, rows := 2, 3
 
-	expected := "(@P0,@P1),(@P2,@P3),(@P4,@P5)"
+	expected := "(@p0,@p1),(@p2,@p3),(@p4,@p5)"
 	got := DefaultConfig.MarkInsertValueSql(cols, rows)
 
 	if got != expected {

@@ -40,16 +40,18 @@ func MysqlMark(i, col, row int) string {
 func PostgresMark(i, col, row int) string {
 	maxInt64b[0] = '$'
 	si := strconv.Itoa(i + 1)
-	copy(maxInt64b[1:len(si)], si)
-	return *(*string)(unsafe.Pointer(&maxInt64b))
+	copy(maxInt64b[1:len(si)+1], si)
+	newSlice := maxInt64b[:len(si)+1]
+	return *(*string)(unsafe.Pointer(&newSlice))
 }
 
 func SqlserverMark(i, col, row int) string {
 	maxInt64b[0] = '@'
 	maxInt64b[1] = 'p'
 	si := strconv.Itoa(i)
-	copy(maxInt64b[2:len(si)], si)
-	return *(*string)(unsafe.Pointer(&maxInt64b))
+	copy(maxInt64b[2:len(si)+2], si)
+	newSlice := maxInt64b[:len(si)+2]
+	return *(*string)(unsafe.Pointer(&newSlice))
 }
 
 // MarkInsertValueSql generates insert value part string, param marks are depended on Mark function.
