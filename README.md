@@ -1,6 +1,6 @@
 # Simple Db helper for Go1.18
 
-Wraps `*sql.DB`, `*sql.Tx` and `*sql.Conn` for convenient query and insert.
+Wraps `*sql.DB`, `*sql.Tx` and `*sql.Conn`'s `QueryContext` and `ExecContext` for convenient query and insert.
 
 Uses generics for table model mapping.
 
@@ -86,5 +86,5 @@ dbh query and insert functions accept `*sql.DB`, `*sql.Tx` or `*sql.Conn` as fir
 `Config` is only used for insert. A `DefaultConfig` is provided. `Config.Mark` function is used for insert value parameter marks.
 Simple Mark function is provided, `MysqlMark`, `PostgresMark`, `SqlserverMark`
 
-`Args()` funtion must be implemented by pointer to the model struct/type, and return a slice of pointers.
+`Args()` funtion must be implemented by pointer to the model struct/type, and return a slice of pointers. It's for rows scan and exec arguments.
 For select query only, implement `ArgsProvider` (the `Args()` function) is enough.
