@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unsafe"
 )
 
 type MarkFunc func(i, col, row int) string
@@ -30,16 +31,25 @@ var DefaultConfig = &Config{
 	cache: make(map[string]string),
 }
 
+var maxInt64b = make([]byte, 19)
+
 func MysqlMark(i, col, row int) string {
 	return "?"
 }
 
 func PostgresMark(i, col, row int) string {
-	return "$" + strconv.Itoa(i+1)
+	maxInt64b[0] = '$'
+	si := strconv.Itoa(i + 1)
+	copy(maxInt64b[1:len(si)], si)
+	return *(*string)(unsafe.Pointer(&maxInt64b))
 }
 
 func SqlserverMark(i, col, row int) string {
-	return "@p" + strconv.Itoa(i)
+	maxInt64b[0] = '@'
+	maxInt64b[1] = 'p'
+	si := strconv.Itoa(i)
+	copy(maxInt64b[2:len(si)], si)
+	return *(*string)(unsafe.Pointer(&maxInt64b))
 }
 
 // MarkInsertValueSql generates insert value part string, param marks are depended on Mark function.
