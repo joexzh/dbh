@@ -96,7 +96,7 @@ func TestQuery(t *testing.T) {
 
 	ctx := context.Background()
 
-	users1, err := QueryContext(db, ctx, query, func() *TestUser { return new(TestUser) }, u1.Id)
+	users1, err := QueryContext[*TestUser](db, ctx, query, u1.Id)
 	if err != nil {
 		t.Fatalf("QueryContext error: %s", err)
 	}
@@ -127,7 +127,7 @@ func TestTxQuery(t *testing.T) {
 		t.Fatalf("BeginTx error: %s", err)
 	}
 	defer tx.Rollback()
-	users1, err := QueryContext(tx, ctx, query, func() *TestUser { return new(TestUser) }, u1.Id)
+	users1, err := QueryContext[*TestUser](tx, ctx, query, u1.Id)
 	if err != nil {
 		t.Fatalf("QueryContext error: %s", err)
 	}
@@ -329,7 +329,7 @@ func TestScanListFromZeroLen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db.Query error: %s", err)
 	}
-	ScanList(rows, &list, nil)
+	ScanList(rows, &list)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
@@ -349,7 +349,7 @@ func TestScanListFromOneLen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db.Query error: %s", err)
 	}
-	ScanList(rows, &list, nil)
+	ScanList(rows, &list)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
@@ -369,7 +369,7 @@ func TestScanListWithCreateT(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db.Query error: %s", err)
 	}
-	ScanList(rows, &list, func() *TestUser { return new(TestUser) })
+	ScanList(rows, &list)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
@@ -486,7 +486,7 @@ func BenchmarkGenericQuery(b *testing.B) {
 		PrepareQueryData(mock, query, []TestUser{u1}, u1.Id)
 
 		ctx := context.Background()
-		users, err := QueryContext(db, ctx, query, func() *TestUser { return new(TestUser) }, u1.Id)
+		users, err := QueryContext[*TestUser](db, ctx, query, u1.Id)
 		if err != nil {
 			log.Fatal(err)
 		}

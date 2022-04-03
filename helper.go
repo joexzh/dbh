@@ -48,21 +48,21 @@ func QueryRow[T ArgsProvider](q queryableRow, queryString string, t T, vals ...a
 	return QueryRowContext(q, context.Background(), queryString, t, vals...)
 }
 
-func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString string, newT func() T, vals ...any) ([]T, error) {
+func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString string, vals ...any) ([]T, error) {
 	rows, err := q.QueryContext(ctx, queryString, vals...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	list := make([]T, 0)
-	if err = ScanList(rows, &list, newT); err != nil {
+	if err = ScanList(rows, &list); err != nil {
 		return nil, err
 	}
 	return list, nil
 }
 
-func Query[T ArgsProvider](q queryable, queryString string, createT func() T, vals ...any) ([]T, error) {
-	return QueryContext(q, context.Background(), queryString, createT, vals...)
+func Query[T ArgsProvider](q queryable, queryString string, vals ...any) ([]T, error) {
+	return QueryContext[T](q, context.Background(), queryString, vals...)
 }
 
 func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, bulkSize int, list ...T) (int64, error) {
@@ -151,14 +151,9 @@ func InsertContext[T TableInfoProvider](ex executable, ctx context.Context, t T)
 	return BulkInsertContext(ex, ctx, 1, t)
 }
 
-func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T, createT func() T) error {
+func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T) error {
 	for i := 0; rows.Next(); i++ {
-		var t T
-		if createT != nil {
-			t = createT()
-		} else {
-			t = newT[T]()
-		}
+		t := newT[T]()
 		err := rows.Scan(t.Args()...)
 		if err != nil {
 			return err

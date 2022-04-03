@@ -42,16 +42,7 @@ func main() {
     ctx := context.Background()
 
     // select []*TestUser
-    users, err := dbh.QueryContext[*TestUser](db, ctx, "select * from users where name=? and age=?", nil, "John", 30)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // provide a newT function to avoid using reflection
-    newUser := func() *TestUser {
-        return new(TestUser)
-    }
-    users, err := dbh.QueryContext[*TestUser](db, ctx, "select * from users where name=? and age=?", newUser, "John", 30)
+    users, err := dbh.QueryContext[*TestUser](db, ctx, "select * from users where name=? and age=?", "John", 30)
     if err != nil {
         log.Fatal(err)
     }
