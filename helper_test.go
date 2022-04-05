@@ -193,7 +193,7 @@ func TestTxInsert(t *testing.T) {
 	}
 }
 
-func mockBulkInsert(t *testing.T, db executable, mock sqlmock.Sqlmock, bulkSize, listSize int,
+func mockBulkInsert(t *testing.T, db DbInterface, mock sqlmock.Sqlmock, bulkSize, listSize int,
 	prepare func(sqlmock.Sqlmock) *sqlmock.ExpectedPrepare) []*TestUser {
 	users := make([]*TestUser, listSize)
 	var stmt *sqlmock.ExpectedPrepare
@@ -228,7 +228,7 @@ func mockBulkInsert(t *testing.T, db executable, mock sqlmock.Sqlmock, bulkSize,
 	return users
 }
 
-func testBulkInsert(t *testing.T, db executable, ctx context.Context, bulkSize int, users []*TestUser) int64 {
+func testBulkInsert(t *testing.T, db DbInterface, ctx context.Context, bulkSize int, users []*TestUser) int64 {
 	total, err := BulkInsertContext(db, ctx, bulkSize, users...)
 	if err != nil {
 		t.Fatalf("BulkInsertContext error: %s", err)

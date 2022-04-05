@@ -23,33 +23,27 @@ type TableInfoProvider interface {
 	Config() *Config
 }
 
-type queryable interface {
+type DbInterface interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-}
-
-type queryableRow interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-type executable interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 }
 
-func QueryRowContext[T ArgsProvider](q queryableRow, ctx context.Context, queryString string, t T, vals ...any) error {
-	row := q.QueryRowContext(ctx, queryString, vals...)
+func QueryRowContext[T ArgsProvider](db DbInterface, ctx context.Context, queryString string, t T, vals ...any) error {
+	row := db.QueryRowContext(ctx, queryString, vals...)
 	if err := row.Scan(t.Args()...); err != nil {
 		return err
 	}
 	return nil
 }
 
-func QueryRow[T ArgsProvider](q queryableRow, queryString string, t T, vals ...any) error {
-	return QueryRowContext(q, context.Background(), queryString, t, vals...)
+func QueryRow[T ArgsProvider](db DbInterface, queryString string, t T, vals ...any) error {
+	return QueryRowContext(db, context.Background(), queryString, t, vals...)
 }
 
-func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString string, vals ...any) ([]T, error) {
-	rows, err := q.QueryContext(ctx, queryString, vals...)
+func QueryContext[T ArgsProvider](db DbInterface, ctx context.Context, queryString string, vals ...any) ([]T, error) {
+	rows, err := db.QueryContext(ctx, queryString, vals...)
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +55,11 @@ func QueryContext[T ArgsProvider](q queryable, ctx context.Context, queryString 
 	return list, nil
 }
 
-func Query[T ArgsProvider](q queryable, queryString string, vals ...any) ([]T, error) {
-	return QueryContext[T](q, context.Background(), queryString, vals...)
+func Query[T ArgsProvider](db DbInterface, queryString string, vals ...any) ([]T, error) {
+	return QueryContext[T](db, context.Background(), queryString, vals...)
 }
 
-func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, bulkSize int, list ...T) (int64, error) {
+func BulkInsertContext[T TableInfoProvider](db DbInterface, ctx context.Context, bulkSize int, list ...T) (int64, error) {
 	for len(list) == 0 {
 		return 0, nil
 	}
@@ -89,7 +83,7 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 		if config.PrintSql {
 			fmt.Println("prepared statement:", prepareSql)
 		}
-		stmt, err = ex.PrepareContext(ctx, prepareSql)
+		stmt, err = db.PrepareContext(ctx, prepareSql)
 		if err != nil {
 			return 0, err
 		}
@@ -127,7 +121,7 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 			if config.PrintSql {
 				fmt.Println(sqlString)
 			}
-			ret, err := ex.ExecContext(ctx, sqlString, vals...)
+			ret, err := db.ExecContext(ctx, sqlString, vals...)
 			if err != nil {
 				return 0, err
 			}
@@ -139,16 +133,16 @@ func BulkInsertContext[T TableInfoProvider](ex executable, ctx context.Context, 
 	return total, nil
 }
 
-func BulkInsert[T TableInfoProvider](ex executable, bulkSize int, list ...T) (int64, error) {
-	return BulkInsertContext(ex, context.Background(), bulkSize, list...)
+func BulkInsert[T TableInfoProvider](db DbInterface, bulkSize int, list ...T) (int64, error) {
+	return BulkInsertContext(db, context.Background(), bulkSize, list...)
 }
 
-func Insert[T TableInfoProvider](ex executable, t T) (int64, error) {
-	return BulkInsertContext(ex, context.Background(), 1, t)
+func Insert[T TableInfoProvider](db DbInterface, t T) (int64, error) {
+	return BulkInsertContext(db, context.Background(), 1, t)
 }
 
-func InsertContext[T TableInfoProvider](ex executable, ctx context.Context, t T) (int64, error) {
-	return BulkInsertContext(ex, ctx, 1, t)
+func InsertContext[T TableInfoProvider](db DbInterface, ctx context.Context, t T) (int64, error) {
+	return BulkInsertContext(db, ctx, 1, t)
 }
 
 func ScanList[T ArgsProvider](rows *sql.Rows, list *[]T) error {
